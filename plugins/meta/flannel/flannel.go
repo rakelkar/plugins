@@ -26,6 +26,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -33,6 +34,7 @@ import (
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/version"
+	"math/big"
 )
 
 const (
@@ -45,6 +47,7 @@ type NetConf struct {
 	SubnetFile string                 `json:"subnetFile"`
 	DataDir    string                 `json:"dataDir"`
 	Delegate   map[string]interface{} `json:"delegate"`
+	WindowsDelegate   map[string]interface{} `json:"windowsDelegate"`
 }
 
 type subnetEnv struct {
@@ -188,6 +191,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
+	if runtime.GOOS == "windows" {
+		return cmdAddWindows(args.ContainerID, n, fenv)
+	}
+
 	if n.Delegate == nil {
 		n.Delegate = make(map[string]interface{})
 	} else {
@@ -203,10 +210,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	n.Delegate["name"] = n.Name
-
-	if !hasKey(n.Delegate, "type") {
-		n.Delegate["type"] = "bridge"
-	}
 
 	if !hasKey(n.Delegate, "ipMasq") {
 		// if flannel is not doing ipmasq, we should
@@ -239,6 +242,83 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	return delegateAdd(args.ContainerID, n.DataDir, n.Delegate)
+}
+
+func cmdAddWindows(containerID string, n *NetConf, fenv *subnetEnv) error {
+	if n.WindowsDelegate == nil {
+		n.WindowsDelegate = make(map[string]interface{})
+	} else {
+		if hasKey(n.WindowsDelegate, "type") && !isString(n.WindowsDelegate["type"]) {
+			return fmt.Errorf("'delegate' dictionary, if present, must have (string) 'type' field")
+		}
+		if hasKey(n.WindowsDelegate, "name") {
+			return fmt.Errorf("'windowsDelegate' dictionary must not have 'name' field, it'll be set by flannel")
+		}
+		if hasKey(n.WindowsDelegate, "ipam") {
+			return fmt.Errorf("'windowsDelegate' dictionary must not have 'ipam' field, it'll be set by flannel")
+		}
+	}
+
+	// TODO: rakesh: not required once Flannel starts creating the network (then we dont rely on CNI so can set any name)
+	n.WindowsDelegate["name"] = "l2bridge"
+	n.WindowsDelegate["hnsNetworkType"] = "l2bridge"
+
+	if !hasKey(n.WindowsDelegate, "type") {
+		n.WindowsDelegate["type"] = "wincni.exe"
+	}
+
+	if !hasKey(n.WindowsDelegate, "cniVersion") {
+		n.WindowsDelegate["cniVersion"] = "0.2.0"
+	}
+
+	// TODO: rakesh: figure out what to do for ipmasq!
+	if !hasKey(n.WindowsDelegate, "ipMasq") {
+		// if flannel is not doing ipmasq, we should
+		ipmasq := !*fenv.ipmasq
+		n.WindowsDelegate["ipMasq"] = ipmasq
+	}
+
+	// TODO: rakesh: does HNS support this?
+	if !hasKey(n.WindowsDelegate, "mtu") {
+		mtu := fenv.mtu
+		n.WindowsDelegate["mtu"] = mtu
+	}
+
+	if n.CNIVersion != "" {
+		n.WindowsDelegate["cniVersion"] = n.CNIVersion
+	}
+
+	// TODO: rakesh: for now CNI is IPAM - but once host-local works default to that (for overlay)
+	n.WindowsDelegate["ipam"] = map[string]interface{}{
+		"subnet": fenv.sn.String(),
+		"routes": []types.Route{
+			types.Route{
+				GW: calcGatewayIPforWindows(fenv.sn),
+				Dst: net.IPNet { IP:net.IPv4zero, Mask:net.IPv4Mask(0, 0, 0, 0)},
+			},
+		},
+	}
+
+	return delegateAdd(containerID, n.DataDir, n.WindowsDelegate)
+}
+
+func calcGatewayIPforWindows(ipn *net.IPNet) net.IP {
+	// HNS currently requires x.x.x.2
+	// TODO: rakesh: file a bug somewhere to remove this when HNS the HNS limitation is fixed
+	nid := ipn.IP.Mask(ipn.Mask)
+	i := ipToInt(nid)
+	return intToIP(i.Add(i, big.NewInt(2)))
+}
+
+func ipToInt(ip net.IP) *big.Int {
+	if v := ip.To4(); v != nil {
+		return big.NewInt(0).SetBytes(v)
+	}
+	return big.NewInt(0).SetBytes(ip.To16())
+}
+
+func intToIP(i *big.Int) net.IP {
+	return net.IP(i.Bytes())
 }
 
 func cmdDel(args *skel.CmdArgs) error {
