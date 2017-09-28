@@ -211,6 +211,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	n.Delegate["name"] = n.Name
 
+	if !hasKey(n.Delegate, "type") {
+		n.Delegate["type"] = "bridge"
+	}
+
 	if !hasKey(n.Delegate, "ipMasq") {
 		// if flannel is not doing ipmasq, we should
 		ipmasq := !*fenv.ipmasq
@@ -249,7 +253,7 @@ func cmdAddWindows(containerID string, n *NetConf, fenv *subnetEnv) error {
 		n.WindowsDelegate = make(map[string]interface{})
 	} else {
 		if hasKey(n.WindowsDelegate, "type") && !isString(n.WindowsDelegate["type"]) {
-			return fmt.Errorf("'delegate' dictionary, if present, must have (string) 'type' field")
+			return fmt.Errorf("'windowsDelegate' dictionary, if present, must have (string) 'type' field")
 		}
 		if hasKey(n.WindowsDelegate, "name") {
 			return fmt.Errorf("'windowsDelegate' dictionary must not have 'name' field, it'll be set by flannel")
@@ -267,10 +271,6 @@ func cmdAddWindows(containerID string, n *NetConf, fenv *subnetEnv) error {
 		n.WindowsDelegate["type"] = "wincni.exe"
 	}
 
-	if !hasKey(n.WindowsDelegate, "cniVersion") {
-		n.WindowsDelegate["cniVersion"] = "0.2.0"
-	}
-
 	// TODO: rakesh: figure out what to do for ipmasq!
 	if !hasKey(n.WindowsDelegate, "ipMasq") {
 		// if flannel is not doing ipmasq, we should
@@ -284,6 +284,7 @@ func cmdAddWindows(containerID string, n *NetConf, fenv *subnetEnv) error {
 		n.WindowsDelegate["mtu"] = mtu
 	}
 
+	n.WindowsDelegate["cniVersion"] = "0.2.0"
 	if n.CNIVersion != "" {
 		n.WindowsDelegate["cniVersion"] = n.CNIVersion
 	}
