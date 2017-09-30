@@ -263,33 +263,19 @@ func cmdAddWindows(containerID string, n *NetConf, fenv *subnetEnv) error {
 		}
 	}
 
-	// TODO: rakesh: not required once Flannel starts creating the network (then we dont rely on CNI so can set any name)
-	n.WindowsDelegate["name"] = "l2bridge"
-	n.WindowsDelegate["hnsNetworkType"] = "l2bridge"
+	n.WindowsDelegate["name"] = n.Name
 
 	if !hasKey(n.WindowsDelegate, "type") {
 		n.WindowsDelegate["type"] = "wincni.exe"
 	}
 
-	// TODO: rakesh: figure out what to do for ipmasq!
-	if !hasKey(n.WindowsDelegate, "ipMasq") {
-		// if flannel is not doing ipmasq, we should
-		ipmasq := !*fenv.ipmasq
-		n.WindowsDelegate["ipMasq"] = ipmasq
-	}
-
-	// TODO: rakesh: does HNS support this?
-	if !hasKey(n.WindowsDelegate, "mtu") {
-		mtu := fenv.mtu
-		n.WindowsDelegate["mtu"] = mtu
-	}
+	updateOutboundNat(&n.WindowsDelegate, fenv)
 
 	n.WindowsDelegate["cniVersion"] = "0.2.0"
 	if n.CNIVersion != "" {
 		n.WindowsDelegate["cniVersion"] = n.CNIVersion
 	}
 
-	// TODO: rakesh: for now CNI is IPAM - but once host-local works default to that (for overlay)
 	n.WindowsDelegate["ipam"] = map[string]interface{}{
 		"subnet": fenv.sn.String(),
 		"routes": []types.Route{
@@ -301,6 +287,52 @@ func cmdAddWindows(containerID string, n *NetConf, fenv *subnetEnv) error {
 	}
 
 	return delegateAdd(containerID, n.DataDir, n.WindowsDelegate)
+}
+
+func updateOutboundNat(windowsDelegate *map[string]interface{}, fenv *subnetEnv) error {
+	if hasKey(*windowsDelegate, "AdditionalArgs") {
+		addlArgs := (*windowsDelegate)["AdditionalArgs"]
+		switch at := addlArgs.(type) {
+		case []interface{}:
+			for _, policy := range at {
+				switch pt := policy.(type) {
+				case map[string]interface{}:
+					if hasKey(pt, "Value") {
+						policyValue := pt["Value"]
+						switch pv := policyValue.(type) {
+						case map[string]interface{}:
+							if hasKey(pv, "Type") {
+								if strings.EqualFold(pv["Type"].(string), "OutBoundNAT") {
+									// keep what the user configured
+									return nil
+								}
+							}
+						}
+
+					}
+				}
+			}
+		default:
+			return fmt.Errorf("invalid config, WindowsDelegate.AdditionalArgs must be an array")
+		}
+	}
+
+	ipmasq := !*fenv.ipmasq
+	if ipmasq {
+		(*windowsDelegate)["AdditionalArgs"] = []interface {}{
+			map[string]interface{}{
+				"Name": "EndpointPolicy",
+				"Value": map[string]interface{}{
+					"Type": "OutBoundNAT",
+					"ExceptionList": []string{
+						fenv.nw.String(),
+					},
+				},
+			},
+		}
+	}
+
+	return nil
 }
 
 func calcGatewayIPforWindows(ipn *net.IPNet) net.IP {
