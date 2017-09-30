@@ -44,10 +44,10 @@ const (
 
 type NetConf struct {
 	types.NetConf
-	SubnetFile string                 `json:"subnetFile"`
-	DataDir    string                 `json:"dataDir"`
-	Delegate   map[string]interface{} `json:"delegate"`
-	WindowsDelegate   map[string]interface{} `json:"windowsDelegate"`
+	SubnetFile      string                 `json:"subnetFile"`
+	DataDir         string                 `json:"dataDir"`
+	Delegate        map[string]interface{} `json:"delegate"`
+	WindowsDelegate map[string]interface{} `json:"windowsDelegate"`
 }
 
 type subnetEnv struct {
@@ -280,8 +280,8 @@ func cmdAddWindows(containerID string, n *NetConf, fenv *subnetEnv) error {
 		"subnet": fenv.sn.String(),
 		"routes": []types.Route{
 			types.Route{
-				GW: calcGatewayIPforWindows(fenv.sn),
-				Dst: net.IPNet { IP:net.IPv4zero, Mask:net.IPv4Mask(0, 0, 0, 0)},
+				GW:  calcGatewayIPforWindows(fenv.sn),
+				Dst: net.IPNet{IP: net.IPv4zero, Mask: net.IPv4Mask(0, 0, 0, 0)},
 			},
 		},
 	}
@@ -289,51 +289,58 @@ func cmdAddWindows(containerID string, n *NetConf, fenv *subnetEnv) error {
 	return delegateAdd(containerID, n.DataDir, n.WindowsDelegate)
 }
 
-func updateOutboundNat(windowsDelegate *map[string]interface{}, fenv *subnetEnv) error {
-	if hasKey(*windowsDelegate, "AdditionalArgs") {
-		addlArgs := (*windowsDelegate)["AdditionalArgs"]
-		switch at := addlArgs.(type) {
-		case []interface{}:
-			for _, policy := range at {
-				switch pt := policy.(type) {
-				case map[string]interface{}:
-					if hasKey(pt, "Value") {
-						policyValue := pt["Value"]
-						switch pv := policyValue.(type) {
-						case map[string]interface{}:
-							if hasKey(pv, "Type") {
-								if strings.EqualFold(pv["Type"].(string), "OutBoundNAT") {
-									// keep what the user configured
-									return nil
-								}
+func updateOutboundNat(windowsDelegate *map[string]interface{}, fenv *subnetEnv) {
+	if !*fenv.ipmasq {
+		return
+	}
+
+	if !hasKey(*windowsDelegate, "AdditionalArgs") {
+		(*windowsDelegate)["AdditionalArgs"] = []interface{}{}
+	}
+	addlArgs := (*windowsDelegate)["AdditionalArgs"].([]interface{})
+	nwToNat := fenv.nw.String()
+	for _, policy := range addlArgs {
+		pt := policy.(map[string]interface{})
+		if hasKey(pt, "Value") {
+			policyValue := pt["Value"]
+			switch pv := policyValue.(type) {
+			case map[string]interface{}:
+				if hasKey(pv, "Type") {
+					if strings.EqualFold(pv["Type"].(string), "OutBoundNAT") {
+						if !hasKey(pv, "ExceptionList") {
+							// add the exception since there weren't any
+							pv["ExceptionList"] = []interface{}{nwToNat}
+							return
+						}
+
+						nets := pv["ExceptionList"].([]interface{})
+						for _, net := range nets {
+							if net.(string) == nwToNat {
+								// found it - do nothing
+								return
 							}
 						}
 
+						// its not in the list of exceptions, add it
+						pv["ExceptionList"] = append(nets, nwToNat)
+						return
 					}
 				}
 			}
-		default:
-			return fmt.Errorf("invalid config, WindowsDelegate.AdditionalArgs must be an array")
 		}
 	}
 
-	// Get Windows CNI to setup ipmasq
-	ipmasq := *fenv.ipmasq
-	if ipmasq {
-		(*windowsDelegate)["AdditionalArgs"] = []interface {}{
-			map[string]interface{}{
-				"Name": "EndpointPolicy",
-				"Value": map[string]interface{}{
-					"Type": "OutBoundNAT",
-					"ExceptionList": []interface{}{
-						fenv.nw.String(),
-					},
-				},
+	// didn't find the policy, add it
+	natEntry := map[string]interface{}{
+		"Name": "EndpointPolicy",
+		"Value": map[string]interface{}{
+			"Type": "OutBoundNAT",
+			"ExceptionList": []interface{}{
+				nwToNat,
 			},
-		}
+		},
 	}
-
-	return nil
+	(*windowsDelegate)["AdditionalArgs"] = append(addlArgs, natEntry)
 }
 
 func calcGatewayIPforWindows(ipn *net.IPNet) net.IP {

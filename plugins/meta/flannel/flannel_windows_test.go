@@ -19,7 +19,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestFlannelSetsWindowsOutboutNat(t *testing.T) {
+func TestFlannelSetsWindowsOutboundNatWhenNotSet(t *testing.T) {
 	// given a subnet config that requests ipmasq
 	_, nw, _ := net.ParseCIDR("192.168.0.0/16")
 	_, sn, _ := net.ParseCIDR("192.168.10.0/24")
@@ -32,10 +32,9 @@ func TestFlannelSetsWindowsOutboutNat(t *testing.T) {
 
 	// apply it
 	delegate := make(map[string]interface{})
-	err := updateOutboundNat(&delegate, fenv)
+	updateOutboundNat(&delegate, fenv)
 
 	// verify it got applied
-	assert.Nil(t, err)
 	assert.True(t, hasKey(delegate, "AdditionalArgs"))
 
 	addlArgs := (delegate["AdditionalArgs"]).([]interface{})
@@ -56,7 +55,7 @@ func TestFlannelSetsWindowsOutboutNat(t *testing.T) {
 	assert.Equal(t, nw.String(), exceptionList[0].(string))
 }
 
-func TestFlannelSkipsIfOutboutNatAlreadySet(t *testing.T) {
+func TestFlannelAppendsOutboundNatToExistingPolicy(t *testing.T) {
 
 	// given a subnet config that requests ipmasq
 	_, nw, _ := net.ParseCIDR("192.168.0.0/16")
@@ -70,13 +69,12 @@ func TestFlannelSkipsIfOutboutNatAlreadySet(t *testing.T) {
 
 	// first set it
 	delegate := make(map[string]interface{})
-	err := updateOutboundNat(&delegate, fenv)
-	assert.Nil(t, err)
+	updateOutboundNat(&delegate, fenv)
 
 	// then attempt to update it
 	_, nw2, _ := net.ParseCIDR("10.244.0.0/16")
 	fenv.nw = nw2
-	err = updateOutboundNat(&delegate, fenv)
+	updateOutboundNat(&delegate, fenv)
 
 	// but it stays the same!
 	addlArgs := (delegate["AdditionalArgs"]).([]interface{})
@@ -84,5 +82,5 @@ func TestFlannelSkipsIfOutboutNatAlreadySet(t *testing.T) {
 	value := policy["Value"].(map[string]interface{})
 	exceptionList := value["ExceptionList"].([]interface{})
 	assert.Equal(t, nw.String(), exceptionList[0].(string))
-	assert.NotEqual(t, nw2.String(), exceptionList[0].(string))
+	assert.Equal(t, nw2.String(), exceptionList[1].(string))
 }
