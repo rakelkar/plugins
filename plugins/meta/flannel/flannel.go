@@ -317,14 +317,15 @@ func updateOutboundNat(windowsDelegate *map[string]interface{}, fenv *subnetEnv)
 		}
 	}
 
-	ipmasq := !*fenv.ipmasq
+	// Get Windows CNI to setup ipmasq
+	ipmasq := *fenv.ipmasq
 	if ipmasq {
 		(*windowsDelegate)["AdditionalArgs"] = []interface {}{
 			map[string]interface{}{
 				"Name": "EndpointPolicy",
 				"Value": map[string]interface{}{
 					"Type": "OutBoundNAT",
-					"ExceptionList": []string{
+					"ExceptionList": []interface{}{
 						fenv.nw.String(),
 					},
 				},
