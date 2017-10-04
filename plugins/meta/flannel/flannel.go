@@ -278,13 +278,12 @@ func cmdAddWindows(containerID string, n *NetConf, fenv *subnetEnv) error {
 
 	n.WindowsDelegate["ipam"] = map[string]interface{}{
 		"subnet": fenv.sn.String(),
-		"routes": []types.Route{
-			types.Route{
-				GW:  calcGatewayIPforWindows(fenv.sn),
-				Dst: net.IPNet{IP: net.IPv4zero, Mask: net.IPv4Mask(0, 0, 0, 0)},
+		"routes": []interface{}{
+				map[string]interface{}{
+					"GW": calcGatewayIPforWindows(fenv.sn),
+				},
 			},
-		},
-	}
+		}
 
 	return delegateAdd(containerID, n.DataDir, n.WindowsDelegate)
 }
