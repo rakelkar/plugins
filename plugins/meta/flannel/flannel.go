@@ -20,15 +20,18 @@ package main
 
 import (
 	"bufio"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
+	"errors"
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -202,6 +205,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 	}
 
+	if runtime.GOOS == "windows" {
+		return cmdAddWindows(args.ContainerID, n, fenv)
+	}
+
 	n.Delegate["name"] = n.Name
 
 	if !hasKey(n.Delegate, "type") {
@@ -239,6 +246,33 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	return delegateAdd(args.ContainerID, n.DataDir, n.Delegate)
+}
+
+func cmdAddWindows(containerID string, n *NetConf, fenv *subnetEnv) error {
+
+	n.Delegate["name"] = n.Name
+
+	if !hasKey(n.Delegate, "type") {
+		n.Delegate["type"] = "win-l2bridge"
+	}
+
+	// if flannel needs ipmasq - get the plugin to configure it
+	// (this is the opposite of how linux works - on linux the flannel daemon configure ipmasq)
+	n.Delegate["IPMasq"] = *fenv.ipmasq
+	n.Delegate["clusterNetworkPrefix"] = fenv.nw.String()
+
+	n.Delegate["cniVersion"] = "0.2.0"
+	if n.CNIVersion != "" {
+		n.Delegate["cniVersion"] = n.CNIVersion
+	}
+
+	n.Delegate["ipam"] = map[string]interface{}{
+		"type":       "host-local",
+		"subnet":     fenv.sn.String(),
+	}
+
+
+	return delegateAdd(containerID, n.DataDir, n.Delegate)
 }
 
 func cmdDel(args *skel.CmdArgs) error {
