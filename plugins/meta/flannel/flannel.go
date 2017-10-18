@@ -252,9 +252,12 @@ func cmdAddWindows(containerID string, n *NetConf, fenv *subnetEnv) error {
 
 	n.Delegate["name"] = n.Name
 
-	if !hasKey(n.Delegate, "type") {
-		n.Delegate["type"] = "wincni.exe"
+	backendType := "bridge"
+	if hasKey(n.Delegate, "type") {
+		backendType = n.Delegate["type"].(string)
 	}
+
+	n.Delegate["type"] = "wincni.exe"
 
 	updateOutboundNat(n.Delegate, fenv)
 
@@ -263,13 +266,8 @@ func cmdAddWindows(containerID string, n *NetConf, fenv *subnetEnv) error {
 		n.Delegate["cniVersion"] = n.CNIVersion
 	}
 
-	backendType := "hostgw"
-	if hasKey(n.Delegate, "backendType") {
-		backendType = n.Delegate["backendType"].(string)
-	}
-
 	switch backendType {
-	case "hostgw":
+	case "bridge":
 		// let HNS do IPAM for hostgw (L2 bridge) mode
 		gw := fenv.sn.IP.Mask(fenv.sn.Mask)
 		gw[len(gw)-1] += 2
