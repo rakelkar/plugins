@@ -30,17 +30,14 @@ import (
 	"github.com/Microsoft/hcsshim"
 	"strings"
 	"log"
+	"github.com/containernetworking/plugins/pkg/hns"
 )
 
 type NetConf struct {
-	types.NetConf
-	additionalArgs []json.RawMessage `json:"AdditionalArgs,omitempty"`
-}
+	hns.NetConf
 
-type gwInfo struct {
-	gws               []net.IPNet
-	family            int
-	defaultRouteFound bool
+	IPMasq bool
+	clusterNetworkPrefix net.IPNet
 }
 
 func init() {
@@ -56,41 +53,6 @@ func loadNetConf(bytes []byte) (*NetConf, string, error) {
 		return nil, "", fmt.Errorf("failed to load netconf: %v", err)
 	}
 	return n, n.CNIVersion, nil
-}
-
-func constructResult(hnsNetwork *hcsshim.HNSNetwork, hnsEndpoint *hcsshim.HNSEndpoint) (*current.Result, error) {
-	resultInterface := &current.Interface{
-		Name: hnsEndpoint.Name,
-		Mac:  hnsEndpoint.MacAddress,
-	}
-	_, ipSubnet, err := net.ParseCIDR(hnsNetwork.Subnets[0].AddressPrefix)
-	if err != nil {
-		return nil, err
-	}
-
-	resultIPConfig := &current.IPConfig{
-		Address: net.IPNet{
-			IP:   hnsEndpoint.IPAddress,
-			Mask: ipSubnet.Mask},
-		Gateway: net.ParseIP(hnsEndpoint.GatewayAddress),
-	}
-	result := &current.Result{}
-	result.Interfaces = []*current.Interface{resultInterface}
-	result.IPs = []*current.IPConfig{resultIPConfig}
-
-	return result, nil
-}
-
-func getEndpointName(args *skel.CmdArgs, n *NetConf) string {
-	containerIDToUse := args.ContainerID
-	if args.Netns != "" {
-		splits := strings.Split(args.Netns, ":")
-		if len(splits) == 2 {
-			containerIDToUse = splits[1]
-		}
-	}
-	epName := containerIDToUse + "_" + n.Name
-	return epName
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
@@ -113,65 +75,56 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return fmt.Errorf("network %v is of an unexpected type: %v", networkName, hnsNetwork.Type)
 	}
 
-	epName := getEndpointName(args, n)
+	epName := hns.ConstructEndpointName(args.ContainerID, args.Netns, n.Name)
 
-	// check if endpoint already exists
-	createEndpoint := true
-	hnsEndpoint, err := hcsshim.GetHNSEndpointByName(epName)
-	if hnsEndpoint != nil && hnsEndpoint.VirtualNetwork != hnsNetwork.Id {
-		log.Printf("[win-cni] Found existing endpoint %v", epName)
-		createEndpoint = false
-	}
-
-	if createEndpoint {
-		if hnsEndpoint != nil {
-			_, err = hnsEndpoint.Delete()
-			if err != nil {
-				log.Printf("[win-cni] Failed to delete stale endpoint %v, err:%v", epName, err)
-			}
-		}
-
+	hnsEndpoint, err := hns.ProvisionEndpoint(epName, hnsNetwork.Id, args.ContainerID, func() (*hcsshim.HNSEndpoint, error) {
 		// run the IPAM plugin and get back the config to apply
 		r, err := ipam.ExecAdd(n.IPAM.Type, args.StdinData)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		// Convert whatever the IPAM result was into the current Result type
 		result, err := current.NewResultFromResult(r)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		if len(result.IPs) == 0 {
-			return errors.New("IPAM plugin return is missing IP config")
+			return nil, errors.New("IPAM plugin return is missing IP config")
 		}
 
-		// Calculate gateway for bridge network
+		// Calculate gateway for bridge network (needs to be x.2)
 		gw := result.IPs[0].Address.IP.Mask(result.IPs[0].Address.Mask)
 		gw[len(gw)-1] += 2
+
+		// NAT based on the the configured cluster network
+		if n.IPMasq {
+			n.ApplyOutboundNatPolicy(n.clusterNetworkPrefix.String())
+		}
 
 		hnsEndpoint := &hcsshim.HNSEndpoint{
 			Name:           epName,
 			VirtualNetwork: hnsNetwork.Id,
-			DNSServerList:  strings.Join(n.DNS.Nameservers, ","),
+			DNSServerList:  strings.Join(result.DNS.Nameservers, ","),
 			DNSSuffix:      result.DNS.Domain,
 			GatewayAddress: gw.String(),
 			IPAddress:      result.IPs[0].Address.IP,
-			Policies:       n.additionalArgs,
+			Policies:       n.MarshalPolicies(),
 		}
 
 		if hnsEndpoint, err = hnsEndpoint.Create(); err != nil {
-			return err
+			return nil, err
 		}
-	}
 
-	// hot attach
-	if err = hcsshim.HotAttachEndpoint(args.ContainerID, hnsEndpoint.Id); err != nil {
+		return hnsEndpoint, nil
+	})
+
+	if err != nil {
 		return err
 	}
 
-	result, err := constructResult(hnsNetwork, hnsEndpoint)
+	result, err := hns.ConstructResult(hnsNetwork, hnsEndpoint)
 	if err != nil {
 		return err
 	}
@@ -193,37 +146,9 @@ func cmdDel(args *skel.CmdArgs) error {
 		return nil
 	}
 
-	epName := getEndpointName(args, n)
-	hnsEndpoint, err := hcsshim.GetHNSEndpointByName(epName)
-	if err != nil {
-		log.Printf("[win-cni] Failed to find endpoint %v, err:%v", epName, err)
-		return err
-	}
+	epName := hns.ConstructEndpointName(args.ContainerID, args.Netns, n.Name)
 
-	if hnsEndpoint != nil {
-		if args.Netns != "none" {
-			// Shared endpoint removal. Do not remove the endpoint.
-			err = hnsEndpoint.ContainerDetach(args.ContainerID)
-			if err != nil {
-				log.Printf("[win-cni] Failed to detach the container endpoint %v, err:%v", epName, err)
-			}
-			return nil
-		}
-
-		err = hcsshim.HotDetachEndpoint(args.ContainerID, hnsEndpoint.Id)
-		if err != nil {
-			log.Printf("[win-cni] Failed to detach endpoint %v, err:%v", epName, err)
-			return nil
-		}
-
-		_, err = hnsEndpoint.Delete()
-		if err != nil {
-			log.Printf("[win-cni] Failed to delete endpoint %v, err:%v", epName, err)
-			return nil
-		}
-	}
-
-	return nil
+	return hns.DeprovisionEndpoint(epName, args.Netns, args.ContainerID)
 }
 
 func main() {
