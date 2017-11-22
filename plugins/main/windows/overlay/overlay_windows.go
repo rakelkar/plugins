@@ -1,3 +1,4 @@
+// +build windows
 //
 // Copyright 2014 CNI authors
 //
@@ -21,20 +22,20 @@ import (
 	"fmt"
 	"runtime"
 
+	"github.com/Microsoft/hcsshim"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
-	"github.com/containernetworking/plugins/pkg/ipam"
-	"github.com/Microsoft/hcsshim"
-	"strings"
 	"github.com/containernetworking/plugins/pkg/hns"
+	"github.com/containernetworking/plugins/pkg/ipam"
+	"strings"
 )
 
 type NetConf struct {
 	hns.NetConf
 
-	IPMasq bool
+	IPMasq            bool
 	endpointMacPrefix string `json:"endpointMacPrefix,omitempty"`
 }
 
@@ -71,7 +72,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	if hnsNetwork == nil  {
+	if hnsNetwork == nil {
 		return fmt.Errorf("network %v not found", networkName)
 	}
 

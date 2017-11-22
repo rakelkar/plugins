@@ -1,29 +1,45 @@
+// Copyright 2017 CNI authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package hns
 
 import (
-	"strings"
 	"encoding/json"
 	"github.com/containernetworking/cni/pkg/types"
+	"strings"
 )
 
+// NetConf is the CNI spec
 type NetConf struct {
 	types.NetConf
-
-	additionalArgs    []policyArgument `json:"AdditionalArgs,omitempty"`
+	AdditionalArgs []policyArgument `json:"AdditionalArgs,omitempty"`
 }
 
 type policyArgument struct {
-	Type string
+	Type  string
 	Value map[string]interface{}
 }
 
+// MarshalPolicies converts the Endpoint policies in AdditionalArgs
+// to HNS specific policies as Json raw bytes
 func (n *NetConf) MarshalPolicies() []json.RawMessage {
-	if n.additionalArgs == nil {
-		n.additionalArgs = []policyArgument{}
+	if n.AdditionalArgs == nil {
+		n.AdditionalArgs = []policyArgument{}
 	}
 
 	var result []json.RawMessage
-	for policyArg := range n.additionalArgs {
+	for _, policyArg := range n.AdditionalArgs {
 		if data, err := json.Marshal(policyArg); err == nil {
 			result = append(result, data)
 		}
@@ -32,12 +48,14 @@ func (n *NetConf) MarshalPolicies() []json.RawMessage {
 	return result
 }
 
+// ApplyOutboundNatPolicy applies NAT Policy in VFP using HNS
+// Simultaneously an exception is added for the network that has to be Nat'd
 func (n *NetConf) ApplyOutboundNatPolicy(nwToNat string) {
-	if n.additionalArgs == nil {
-		n.additionalArgs = []policyArgument{}
+	if n.AdditionalArgs == nil {
+		n.AdditionalArgs = []policyArgument{}
 	}
 
-	for _, policy := range n.additionalArgs {
+	for _, policy := range n.AdditionalArgs {
 		if !strings.EqualFold(policy.Type, "EndpointPolicy") {
 			continue
 		}
@@ -81,16 +99,17 @@ func (n *NetConf) ApplyOutboundNatPolicy(nwToNat string) {
 		},
 	}
 
-	n.additionalArgs = append(n.additionalArgs, natEntry)
+	n.AdditionalArgs = append(n.AdditionalArgs, natEntry)
 }
 
+// ApplyDefaultPAPolicy is used to configure a endpoint PA policy in HNS
 func (n *NetConf) ApplyDefaultPAPolicy(paAddress string) {
-	if n.additionalArgs == nil {
-		 n.additionalArgs = []policyArgument{}
+	if n.AdditionalArgs == nil {
+		n.AdditionalArgs = []policyArgument{}
 	}
 
 	// if its already present, leave untouched
-	for _, policy := range n.additionalArgs {
+	for _, policy := range n.AdditionalArgs {
 		if policy.Type == "EndpointPolicy" {
 			if hasKey(policy.Value, "PA") {
 				// found it, don't override
@@ -109,7 +128,7 @@ func (n *NetConf) ApplyDefaultPAPolicy(paAddress string) {
 		Value: paPolicyData,
 	}
 
-	n.additionalArgs = append(n.additionalArgs, *paPolicy)
+	n.AdditionalArgs = append(n.AdditionalArgs, *paPolicy)
 
 	return
 }
@@ -118,4 +137,3 @@ func hasKey(m map[string]interface{}, k string) bool {
 	_, ok := m[k]
 	return ok
 }
-
