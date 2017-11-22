@@ -20,7 +20,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -31,7 +30,6 @@ import (
 	"strconv"
 	"strings"
 
-	"errors"
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -267,10 +265,9 @@ func cmdAddWindows(containerID string, n *NetConf, fenv *subnetEnv) error {
 	}
 
 	n.Delegate["ipam"] = map[string]interface{}{
-		"type":       "host-local",
-		"subnet":     fenv.sn.String(),
+		"type":   "host-local",
+		"subnet": fenv.sn.String(),
 	}
-
 
 	return delegateAdd(containerID, n.DataDir, n.Delegate)
 }
