@@ -18,11 +18,15 @@ export GOPATH=${PWD}/gopath
 
 mkdir -p "${PWD}/bin"
 
-echo "Building plugins"
+echo "Building plugins ${GOOS}"
 PLUGINS="plugins/meta/* plugins/main/* plugins/ipam/* plugins/sample"
 for d in $PLUGINS; do
 	if [ -d "$d" ]; then
 		plugin="$(basename "$d")"
+		if [ $plugin == "windows" ]
+		then
+			. $d/build.sh
+		fi
 		echo "  $plugin"
 		# use go install so we don't duplicate work
 		if [ -n "$FASTBUILD" ]

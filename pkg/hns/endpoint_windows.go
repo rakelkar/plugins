@@ -2,12 +2,10 @@ package hns
 
 import (
 	"github.com/Microsoft/hcsshim"
-	"log"
-	"strings"
-	"fmt"
 	"github.com/containernetworking/cni/pkg/types/current"
-	"github.com/juju/errors"
+	"log"
 	"net"
+	"strings"
 )
 
 func ConstructEndpointName(containerID string, netNs string, networkName string) string {

@@ -1,3 +1,4 @@
+// +build windows
 //
 // Copyright 2014 CNI authors
 //
@@ -22,22 +23,22 @@ import (
 	"net"
 	"runtime"
 
+	"github.com/Microsoft/hcsshim"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
-	"github.com/containernetworking/plugins/pkg/ipam"
-	"github.com/Microsoft/hcsshim"
-	"strings"
-	"log"
 	"github.com/containernetworking/plugins/pkg/hns"
+	"github.com/containernetworking/plugins/pkg/ipam"
+	"log"
+	"strings"
 )
 
 type NetConf struct {
 	hns.NetConf
 
-	IPMasq bool
-	clusterNetworkPrefix net.IPNet
+	IPMasq            bool
+	endpointMacPrefix string `json:"endpointMacPrefix,omitempty"`
 }
 
 func init() {
@@ -61,17 +62,23 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
+	if n.endpointMacPrefix != "" {
+		if len(n.endpointMacPrefix) != 5 || n.endpointMacPrefix[2] != '-' {
+			return fmt.Errorf("endpointMacPrefix [%v] is invalid, value must be of the format xx-xx", n.endpointMacPrefix)
+		}
+	}
+
 	networkName := n.Name
 	hnsNetwork, err := hcsshim.GetHNSNetworkByName(networkName)
 	if err != nil {
 		return err
 	}
 
-	if hnsNetwork == nil  {
+	if hnsNetwork == nil {
 		return fmt.Errorf("network %v not found", networkName)
 	}
 
-	if hnsNetwork.Type != "L2Bridge" {
+	if hnsNetwork.Type != "Overlay" {
 		return fmt.Errorf("network %v is of an unexpected type: %v", networkName, hnsNetwork.Type)
 	}
 
@@ -94,13 +101,14 @@ func cmdAdd(args *skel.CmdArgs) error {
 			return nil, errors.New("IPAM plugin return is missing IP config")
 		}
 
-		// Calculate gateway for bridge network (needs to be x.2)
-		gw := result.IPs[0].Address.IP.Mask(result.IPs[0].Address.Mask)
-		gw[len(gw)-1] += 2
-
-		// NAT based on the the configured cluster network
+		ipAddr := result.IPs[0].Address.IP.To4()
+		// conjure a MAC based on the IP for Overlay
+		macAddr := fmt.Sprintf("%v-%02x-%02x-%02x-%02x", n.endpointMacPrefix, ipAddr[0], ipAddr[1], ipAddr[2], ipAddr[3])
+		// use the HNS network gateway
+		gw := hnsNetwork.Subnets[0].GatewayAddress
+		n.ApplyDefaultPAPolicy(hnsNetwork.ManagementIP)
 		if n.IPMasq {
-			n.ApplyOutboundNatPolicy(n.clusterNetworkPrefix.String())
+			n.ApplyOutboundNatPolicy(hnsNetwork.Subnets[0].AddressPrefix)
 		}
 
 		hnsEndpoint := &hcsshim.HNSEndpoint{
@@ -108,8 +116,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 			VirtualNetwork: hnsNetwork.Id,
 			DNSServerList:  strings.Join(result.DNS.Nameservers, ","),
 			DNSSuffix:      result.DNS.Domain,
-			GatewayAddress: gw.String(),
-			IPAddress:      result.IPs[0].Address.IP,
+			GatewayAddress: gw,
+			IPAddress:      ipAddr,
+			MacAddress:     macAddr,
 			Policies:       n.MarshalPolicies(),
 		}
 
