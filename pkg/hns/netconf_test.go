@@ -1,4 +1,4 @@
-// Copyright 2015 CNI authors
+// Copyright 2017 CNI authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,20 +14,9 @@
 package hns
 
 import (
-	"fmt"
-	"io/ioutil"
-	"os"
-
-	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/cni/pkg/types/current"
-	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/containernetworking/plugins/pkg/testutils"
-
+	"encoding/json"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"net"
-	"github.com/gogo/protobuf/jsonpb"
-	"encoding/json"
 )
 
 var _ = Describe("HNS NetConf", func() {
@@ -39,7 +28,7 @@ var _ = Describe("HNS NetConf", func() {
 				n := NetConf{}
 				n.ApplyOutboundNatPolicy("192.168.0.0/16")
 
-				addlArgs := n.additionalArgs
+				addlArgs := n.AdditionalArgs
 				Expect(addlArgs).Should(HaveLen(1))
 
 				policy := addlArgs[0]
@@ -66,7 +55,7 @@ var _ = Describe("HNS NetConf", func() {
 				n.ApplyOutboundNatPolicy("10.244.0.0/16")
 
 				// it should be unchanged!
-				addlArgs := n.additionalArgs
+				addlArgs := n.AdditionalArgs
 				Expect(addlArgs).Should(HaveLen(1))
 
 				policy := addlArgs[0]
@@ -92,7 +81,7 @@ var _ = Describe("HNS NetConf", func() {
 				n := NetConf{}
 				n.ApplyDefaultPAPolicy("192.168.0.1")
 
-				addlArgs := n.additionalArgs
+				addlArgs := n.AdditionalArgs
 				Expect(addlArgs).Should(HaveLen(1))
 
 				policy := addlArgs[0]
@@ -100,7 +89,6 @@ var _ = Describe("HNS NetConf", func() {
 
 				value := policy.Value
 				Expect(value).Should(HaveKey("Type"))
-				Expect(value).Should(HaveKey("ExceptionList"))
 				Expect(value["Type"]).Should(Equal("PA"))
 
 				paAddress := value["PA"].(string)
@@ -114,7 +102,7 @@ var _ = Describe("HNS NetConf", func() {
 				n.ApplyDefaultPAPolicy("192.168.0.1")
 				n.ApplyDefaultPAPolicy("192.168.0.2")
 
-				addlArgs := n.additionalArgs
+				addlArgs := n.AdditionalArgs
 				Expect(addlArgs).Should(HaveLen(1))
 
 				policy := addlArgs[0]
@@ -122,7 +110,6 @@ var _ = Describe("HNS NetConf", func() {
 
 				value := policy.Value
 				Expect(value).Should(HaveKey("Type"))
-				Expect(value).Should(HaveKey("ExceptionList"))
 				Expect(value["Type"]).Should(Equal("PA"))
 
 				paAddress := value["PA"].(string)
@@ -137,15 +124,15 @@ var _ = Describe("HNS NetConf", func() {
 			It("sets it by adding a policy", func() {
 
 				n := NetConf{
-					additionalArgs: []policyArgument {
+					AdditionalArgs: []policyArgument{
 						{
-							Type:"someType",
+							Type: "someType",
 							Value: map[string]interface{}{
 								"someKey": "someValue",
 							},
 						},
 						{
-							Type:"someOtherType",
+							Type: "someOtherType",
 							Value: map[string]interface{}{
 								"someOtherKey": "someOtherValue",
 							},
@@ -174,7 +161,7 @@ var _ = Describe("HNS NetConf", func() {
 				n.ApplyOutboundNatPolicy("10.244.0.0/16")
 
 				// it should be unchanged!
-				addlArgs := n.additionalArgs
+				addlArgs := n.AdditionalArgs
 				Expect(addlArgs).Should(HaveLen(1))
 
 				policy := addlArgs[0]
@@ -186,8 +173,9 @@ var _ = Describe("HNS NetConf", func() {
 				Expect(value["Type"]).Should(Equal("OutBoundNAT"))
 
 				exceptionList := value["ExceptionList"].([]interface{})
-				Expect(exceptionList).Should(HaveLen(1))
+				Expect(exceptionList).Should(HaveLen(2))
 				Expect(exceptionList[0].(string)).Should(Equal("192.168.0.0/16"))
+				Expect(exceptionList[1].(string)).Should(Equal("10.244.0.0/16"))
 			})
 		})
 	})

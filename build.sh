@@ -18,18 +18,26 @@ export GOPATH=${PWD}/gopath
 
 mkdir -p "${PWD}/bin"
 
-echo "Building plugins"
+echo "Building plugins ${GOOS}"
 PLUGINS="plugins/meta/* plugins/main/* plugins/ipam/* plugins/sample"
 for d in $PLUGINS; do
 	if [ -d "$d" ]; then
 		plugin="$(basename "$d")"
-		echo "  $plugin"
-		# use go install so we don't duplicate work
-		if [ -n "$FASTBUILD" ]
+		if [ $plugin == "windows" ]
 		then
-			GOBIN=${PWD}/bin go install -pkgdir $GOPATH/pkg "$@" $REPO_PATH/$d
+			if [ "$GOARCH" == "amd64" ]
+			then
+				GOOS=windows . $d/build.sh
+			fi
 		else
-			go build -o "${PWD}/bin/$plugin" -pkgdir "$GOPATH/pkg" "$@" "$REPO_PATH/$d"
+			echo "  $plugin"
+			# use go install so we don't duplicate work
+			if [ -n "$FASTBUILD" ]
+			then
+				GOBIN=${PWD}/bin go install -pkgdir $GOPATH/pkg "$@" $REPO_PATH/$d
+			else
+				go build -o "${PWD}/bin/$plugin" -pkgdir "$GOPATH/pkg" "$@" "$REPO_PATH/$d"
+			fi
 		fi
 	fi
 done
