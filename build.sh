@@ -25,15 +25,16 @@ for d in $PLUGINS; do
 		plugin="$(basename "$d")"
 		if [ $plugin == "windows" ]
 		then
-			. $d/build.sh
-		fi
-		echo "  $plugin"
-		# use go install so we don't duplicate work
-		if [ -n "$FASTBUILD" ]
-		then
-			GOBIN=${PWD}/bin go install -pkgdir $GOPATH/pkg "$@" $REPO_PATH/$d
+			GOOS=windows . $d/build.sh
 		else
-			go build -o "${PWD}/bin/$plugin" -pkgdir "$GOPATH/pkg" "$@" "$REPO_PATH/$d"
+			echo "  $plugin"
+			# use go install so we don't duplicate work
+			if [ -n "$FASTBUILD" ]
+			then
+				GOBIN=${PWD}/bin go install -pkgdir $GOPATH/pkg "$@" $REPO_PATH/$d
+			else
+				go build -o "${PWD}/bin/$plugin" -pkgdir "$GOPATH/pkg" "$@" "$REPO_PATH/$d"
+			fi
 		fi
 	fi
 done

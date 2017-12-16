@@ -30,7 +30,6 @@ import (
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/hns"
 	"github.com/containernetworking/plugins/pkg/ipam"
-	"log"
 	"strings"
 )
 
