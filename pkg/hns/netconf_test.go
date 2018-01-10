@@ -126,7 +126,7 @@ var _ = Describe("HNS NetConf", func() {
 				n := NetConf{
 					AdditionalArgs: []policyArgument{
 						{
-							Type: "someType",
+							Type: "EndpointPolicy",
 							Value: map[string]interface{}{
 								"someKey": "someValue",
 							},
@@ -141,13 +141,13 @@ var _ = Describe("HNS NetConf", func() {
 				}
 
 				result := n.MarshalPolicies()
-				Expect(len(result)).To(Equal(2))
+				Expect(len(result)).To(Equal(1))
 
-				var policy policyArgument
+				var policy map[string]interface{}
 				err := json.Unmarshal(result[0], &policy)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(policy.Type).To(Equal("someType"))
-				Expect(policy.Value).To(HaveKeyWithValue("someKey", "someValue"))
+				Expect(policy).Should(HaveKey("someKey"))
+				Expect(policy["someKey"]).To(Equal("someValue"))
 			})
 		})
 
