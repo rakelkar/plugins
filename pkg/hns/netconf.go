@@ -40,13 +40,17 @@ func (n *NetConf) MarshalPolicies() []json.RawMessage {
 
 	var result []json.RawMessage
 	for _, policyArg := range n.AdditionalArgs {
-		if data, err := json.Marshal(policyArg); err == nil {
+		if !strings.EqualFold(policyArg.Type, "EndpointPolicy") {
+			continue
+		}
+		if data, err := json.Marshal(policyArg.Value); err == nil {
 			result = append(result, data)
 		}
 	}
 
 	return result
 }
+
 
 // ApplyOutboundNatPolicy applies NAT Policy in VFP using HNS
 // Simultaneously an exception is added for the network that has to be Nat'd
