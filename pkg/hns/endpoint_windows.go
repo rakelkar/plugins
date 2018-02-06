@@ -131,7 +131,7 @@ func ConstructResult(hnsNetwork *hcsshim.HNSNetwork, hnsEndpoint *hcsshim.HNSEnd
 	} else if ipv6 := hnsEndpoint.IPAddress.To16(); ipv6 != nil {
 		ipVersion = "6"
 	} else {
-		return nil, fmt.Errorf("the IPAddress of hnsEndpoint isn't a valid ipv4 or ipv6 Address.")
+		return nil, fmt.Errorf("[win-cni] The IPAddress of hnsEndpoint isn't a valid ipv4 or ipv6 Address.")
 	}
 
 	resultIPConfig := &current.IPConfig{
