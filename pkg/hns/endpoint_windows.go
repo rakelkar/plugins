@@ -17,11 +17,13 @@
 package hns
 
 import (
-	"github.com/Microsoft/hcsshim"
-	"github.com/containernetworking/cni/pkg/types/current"
+	"fmt"
 	"log"
 	"net"
 	"strings"
+
+	"github.com/Microsoft/hcsshim"
+	"github.com/containernetworking/cni/pkg/types/current"
 )
 
 // ConstructEndpointName constructs enpointId which is used to identify an endpoint from HNS
@@ -123,7 +125,17 @@ func ConstructResult(hnsNetwork *hcsshim.HNSNetwork, hnsEndpoint *hcsshim.HNSEnd
 		return nil, err
 	}
 
+	var ipVersion string
+	if ipv4 := hnsEndpoint.IPAddress.To4(); ipv4 != nil {
+		ipVersion = "4"
+	} else if ipv6 := hnsEndpoint.IPAddress.To16(); ipv6 != nil {
+		ipVersion = "6"
+	} else {
+		return nil, fmt.Errorf("[win-cni] The IPAddress of hnsEndpoint isn't a valid ipv4 or ipv6 Address.")
+	}
+
 	resultIPConfig := &current.IPConfig{
+		Version: ipVersion,
 		Address: net.IPNet{
 			IP:   hnsEndpoint.IPAddress,
 			Mask: ipSubnet.Mask},
