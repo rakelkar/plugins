@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
+export MSYS=winsymlinks:nativestrict
+
 if [ "$(uname)" == "Darwin" ]; then
 	export GOOS=linux
 fi
