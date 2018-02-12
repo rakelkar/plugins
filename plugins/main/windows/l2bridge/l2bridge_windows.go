@@ -71,7 +71,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return fmt.Errorf("network %v not found", networkName)
 	}
 
-	if hnsNetwork.Type != "L2Bridge" {
+	if !strings.EqualFold(hnsNetwork.Type,"L2Bridge") {
 		return fmt.Errorf("network %v is of an unexpected type: %v", networkName, hnsNetwork.Type)
 	}
 
