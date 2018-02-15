@@ -64,21 +64,21 @@ func cmdAdd(args *skel.CmdArgs) error {
 		if len(n.endpointMacPrefix) != 5 || n.endpointMacPrefix[2] != '-' {
 			return fmt.Errorf("endpointMacPrefix [%v] is invalid, value must be of the format xx-xx", n.endpointMacPrefix)
 		}
-	} else{
-	    n.endpointMacPrefix="0E-2A"
+	} else {
+		n.endpointMacPrefix = "0E-2A"
 	}
 
 	networkName := n.Name
 	hnsNetwork, err := hcsshim.GetHNSNetworkByName(networkName)
 	if err != nil {
-		return fmt.Errorf("Error while GETHNSNewtorkByName(%v): %v",networkName,err)
+		return fmt.Errorf("Error while GETHNSNewtorkByName(%v): %v", networkName, err)
 	}
 
 	if hnsNetwork == nil {
 		return fmt.Errorf("network %v not found", networkName)
 	}
 
-	if hnsNetwork.Type != "Overlay" {
+	if !strings.EqualFold(hnsNetwork.Type, "Overlay") {
 		return fmt.Errorf("network %v is of an unexpected type: %v", networkName, hnsNetwork.Type)
 	}
 
@@ -88,13 +88,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 		// run the IPAM plugin and get back the config to apply
 		r, err := ipam.ExecAdd(n.IPAM.Type, args.StdinData)
 		if err != nil {
-			return nil, fmt.Errorf("Error while ipam.ExecAdd: %v",err)
+			return nil, fmt.Errorf("Error while ipam.ExecAdd: %v", err)
 		}
 
 		// Convert whatever the IPAM result was into the current Result type
 		result, err := current.NewResultFromResult(r)
 		if err != nil {
-			return nil, fmt.Errorf("Error while NewResultFromResult: %v",err)
+			return nil, fmt.Errorf("Error while NewResultFromResult: %v", err)
 		}
 
 		if len(result.IPs) == 0 {
@@ -126,12 +126,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 	})
 
 	if err != nil {
-		return fmt.Errorf("Error while ProvisionEndpoint(%v,%v,%v) :%v",epName, hnsNetwork.Id,args.ContainerID, err)
+		return fmt.Errorf("Error while ProvisionEndpoint(%v,%v,%v) :%v", epName, hnsNetwork.Id, args.ContainerID, err)
 	}
 
 	result, err := hns.ConstructResult(hnsNetwork, hnsEndpoint)
 	if err != nil {
-		return fmt.Errorf("Error while constructResult: %v",err)
+		return fmt.Errorf("Error while constructResult: %v", err)
 	}
 
 	return types.PrintResult(result, cniVersion)

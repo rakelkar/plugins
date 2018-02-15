@@ -249,8 +249,8 @@
 		{
 			"ImportPath": "golang.org/x/net/ipv4",
 			"Rev": "e90d6d0afc4c315a0d87a568ae68577cc15149a0"
-		},
-		{
+                },
+                { 
 			"ImportPath": "github.com/Microsoft/go-winio",
 			"Comment": "v0.4.5",
 			"Rev": "78439966b38d69bf38227fbf57ac8a6fee70f69a"
