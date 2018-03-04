@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"runtime"
 
 	"github.com/Microsoft/hcsshim"
@@ -37,7 +36,7 @@ type NetConf struct {
 	hns.NetConf
 
 	IPMasq               bool
-	clusterNetworkPrefix net.IPNet
+	ClusterNetworkPrefix string `json:"clusterNetworkPrefix,omitempty"`  // Temporary workaround for problems with parsing net.IPNet
 }
 
 func init() {
@@ -100,7 +99,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		// NAT based on the the configured cluster network
 		if n.IPMasq {
-			n.ApplyOutboundNatPolicy(n.clusterNetworkPrefix.String())
+			n.ApplyOutboundNatPolicy(n.ClusterNetworkPrefix)
 		}
 
 		hnsEndpoint := &hcsshim.HNSEndpoint{

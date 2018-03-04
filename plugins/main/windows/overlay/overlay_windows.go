@@ -36,7 +36,7 @@ type NetConf struct {
 	hns.NetConf
 
 	IPMasq            bool
-	endpointMacPrefix string `json:"endpointMacPrefix,omitempty"`
+	EndpointMacPrefix string `json:"endpointMacPrefix,omitempty"`
 }
 
 func init() {
@@ -60,12 +60,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	if n.endpointMacPrefix != "" {
-		if len(n.endpointMacPrefix) != 5 || n.endpointMacPrefix[2] != '-' {
-			return fmt.Errorf("endpointMacPrefix [%v] is invalid, value must be of the format xx-xx", n.endpointMacPrefix)
+	if n.EndpointMacPrefix != "" {
+		if len(n.EndpointMacPrefix) != 5 || n.EndpointMacPrefix[2] != '-' {
+			return fmt.Errorf("endpointMacPrefix [%v] is invalid, value must be of the format xx-xx", n.EndpointMacPrefix)
 		}
 	} else {
-		n.endpointMacPrefix = "0E-2A"
+		n.EndpointMacPrefix = "0E-2A"
 	}
 
 	networkName := n.Name
@@ -103,7 +103,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		ipAddr := result.IPs[0].Address.IP.To4()
 		// conjure a MAC based on the IP for Overlay
-		macAddr := fmt.Sprintf("%v-%02x-%02x-%02x-%02x", n.endpointMacPrefix, ipAddr[0], ipAddr[1], ipAddr[2], ipAddr[3])
+		macAddr := fmt.Sprintf("%v-%02x-%02x-%02x-%02x", n.EndpointMacPrefix, ipAddr[0], ipAddr[1], ipAddr[2], ipAddr[3])
 		// use the HNS network gateway
 		gw := hnsNetwork.Subnets[0].GatewayAddress
 		n.ApplyDefaultPAPolicy(hnsNetwork.ManagementIP)
