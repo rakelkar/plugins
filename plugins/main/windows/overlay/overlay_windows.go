@@ -114,8 +114,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 		hnsEndpoint := &hcsshim.HNSEndpoint{
 			Name:           epName,
 			VirtualNetwork: hnsNetwork.Id,
-			DNSServerList:  strings.Join(result.DNS.Nameservers, ","),
-			DNSSuffix:      result.DNS.Domain,
+			DNSServerList:  strings.Join(n.DNS.Nameservers, ","),
+			DNSSuffix:      n.DNS.Domain,
 			GatewayAddress: gw,
 			IPAddress:      ipAddr,
 			MacAddress:     macAddr,
