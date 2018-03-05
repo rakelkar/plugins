@@ -101,13 +101,14 @@ func cmdAdd(args *skel.CmdArgs) error {
 		// NAT based on the the configured cluster network
 		if n.IPMasq {
 			n.ApplyOutboundNatPolicy(n.ClusterNetworkPrefix)
-			exec.Command("powershell", 
-						"-command", 
-						"New-NetNat", 
-						"-Name", 
-						fmt.Sprintf("%v_nat", networkName), 
-						"-InternalIPInterfaceAddressPrefix", 
-						n.ClusterNetworkPrefix)  // Workaround for manual creation of NetNat
+			cmd := exec.Command("powershell", 
+								"-command", 
+								"New-NetNat", 
+								"-Name", 
+								fmt.Sprintf("%v_nat", networkName), 
+								"-InternalIPInterfaceAddressPrefix", 
+								n.ClusterNetworkPrefix)  // Workaround for manual creation of NetNat
+			cmd.Run()
 		}
 
 		hnsEndpoint := &hcsshim.HNSEndpoint{

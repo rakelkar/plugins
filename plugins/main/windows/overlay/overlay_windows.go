@@ -110,13 +110,14 @@ func cmdAdd(args *skel.CmdArgs) error {
 		n.ApplyDefaultPAPolicy(hnsNetwork.ManagementIP)
 		if n.IPMasq {
 			n.ApplyOutboundNatPolicy(hnsNetwork.Subnets[0].AddressPrefix)
-			exec.Command("powershell", 
-						"-command", 
-						"New-NetNat", 
-						"-Name", 
-						fmt.Sprintf("%v_nat", networkName), 
-						"-InternalIPInterfaceAddressPrefix", 
-						hnsNetwork.Subnets[0].AddressPrefix)  // Workaround for manual creation of NetNat
+			cmd := exec.Command("powershell", 
+								"-command", 
+								"New-NetNat", 
+								"-Name", 
+								fmt.Sprintf("%v_nat", networkName), 
+								"-InternalIPInterfaceAddressPrefix", 
+								hnsNetwork.Subnets[0].AddressPrefix)  // Workaround for manual creation of NetNat
+			cmd.Run()
 		}
 
 		hnsEndpoint := &hcsshim.HNSEndpoint{
