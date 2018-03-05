@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os/exec"
 	"runtime"
 
 	"github.com/Microsoft/hcsshim"
@@ -109,6 +110,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 		n.ApplyDefaultPAPolicy(hnsNetwork.ManagementIP)
 		if n.IPMasq {
 			n.ApplyOutboundNatPolicy(hnsNetwork.Subnets[0].AddressPrefix)
+			exec.Command("powershell", 
+						"-command", 
+						"New-NetNat", 
+						"-Name", 
+						fmt.Sprintf("%v_nat", networkName), 
+						"-InternalIPInterfaceAddressPrefix", 
+						hnsNetwork.Subnets[0].AddressPrefix)  // Workaround for manual creation of NetNat
 		}
 
 		hnsEndpoint := &hcsshim.HNSEndpoint{
