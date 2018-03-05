@@ -40,9 +40,10 @@ func (n *NetConf) MarshalPolicies() []json.RawMessage {
 
 	var result []json.RawMessage
 	for _, policyArg := range n.AdditionalArgs {
-		if !strings.EqualFold(policyArg.Type, "EndpointPolicy") {
-			continue
-		}
+                // This part seems to ommit any custom endpoint policies when passed exactly like for wincni.exe
+		//if !strings.EqualFold(policyArg.Type, "EndpointPolicy") {
+		//	continue
+		//}
 		if data, err := json.Marshal(policyArg.Value); err == nil {
 			result = append(result, data)
 		}

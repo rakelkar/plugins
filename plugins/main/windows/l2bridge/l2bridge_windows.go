@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
+	"os/exec"
 	"runtime"
 
 	"github.com/Microsoft/hcsshim"
@@ -37,7 +37,7 @@ type NetConf struct {
 	hns.NetConf
 
 	IPMasq               bool
-	clusterNetworkPrefix net.IPNet
+	ClusterNetworkPrefix string `json:"clusterNetworkPrefix,omitempty"`  // Temporary workaround for problems with parsing net.IPNet
 }
 
 func init() {
@@ -100,14 +100,22 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		// NAT based on the the configured cluster network
 		if n.IPMasq {
-			n.ApplyOutboundNatPolicy(n.clusterNetworkPrefix.String())
+			n.ApplyOutboundNatPolicy(n.ClusterNetworkPrefix)
+			cmd := exec.Command("powershell", 
+								"-command", 
+								"New-NetNat", 
+								"-Name", 
+								fmt.Sprintf("%v_nat", networkName), 
+								"-InternalIPInterfaceAddressPrefix", 
+								n.ClusterNetworkPrefix)  // Workaround for manual creation of NetNat
+			cmd.Run()
 		}
 
 		hnsEndpoint := &hcsshim.HNSEndpoint{
 			Name:           epName,
 			VirtualNetwork: hnsNetwork.Id,
-			DNSServerList:  strings.Join(result.DNS.Nameservers, ","),
-			DNSSuffix:      result.DNS.Domain,
+			DNSServerList:  strings.Join(n.DNS.Nameservers, ","),
+			DNSSuffix:      n.DNS.Domain,
 			GatewayAddress: gw.String(),
 			IPAddress:      result.IPs[0].Address.IP,
 			Policies:       n.MarshalPolicies(),
